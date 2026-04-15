@@ -3,8 +3,8 @@ import requests
 import json
 
 #               ВАШИ ДАННЫЕ
-API_KEY = "AQVNxxL8F0PWwxZk6dgWmTcb8dpF2MK7U9UCPzZl"
-FOLDER_ID = "b1gqq8ef2a242jjujuj8"
+API_KEY = "AQVNxxL8F0PWwxZk6dgWmTcbpF2MK7U9UCPzZl"
+FOLDER_ID = "b1gqq8ef242jjujuj8"
 
 
 st.set_page_config(page_title="AI Репетитор: ВПР и Олимпиады", page_icon="📚", layout="wide")
