@@ -2,7 +2,7 @@
 
 An AI tutor for exam and olympiad prep — generates practice tasks in the real format of Russian school exams (ВПР) and academic olympiads (ВсОШ), reviews answers, and adapts to the subject, grade, and prep type.
 
-**Built solo by [0x8](https://github.com/Lux-8)**
+**Built solo by [0x8]((https://github.com/0x8-root))**
 
 ---
 
