@@ -1,145 +1,120 @@
-import streamlit as st
+"""
+AI-репетитор для подготовки к ВПР и олимпиадам.
+FastAPI backend + Groq API (бесплатно, без карты, без возрастных ограничений).
+
+Запуск:
+    1. Зарегистрируйся на console.groq.com (email или Google-аккаунт)
+    2. Создай ключ на console.groq.com/keys
+    3. Скопируй .env.example в .env и впиши GROQ_API_KEY
+    4. pip install -r requirements.txt
+    5. uvicorn app:app --reload
+    6. Открой http://127.0.0.1:8000
+"""
+
+import os
+import logging
+from typing import Literal
+
 import requests
-import json
+from fastapi import FastAPI, HTTPException
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 
-#               ВАШИ ДАННЫЕ
-API_KEY = "AQVNxxL8F0PWwxZk6dgWmTcb8dpF2MK7U9UCPzZl"
-FOLDER_ID = "b1gqq8ef2a242jjujuj8"
+from prompts import get_system_prompt
 
+load_dotenv()
 
-st.set_page_config(page_title="AI Репетитор: ВПР и Олимпиады", page_icon="📚", layout="wide")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("ai-coach")
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_MODEL = os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-def ask_yandexgpt(messages):
-    url = "https://llm.api.cloud.yandex.net/foundationModels/v1/completion"
-    headers = {"Authorization": f"Api-Key {API_KEY}", "Content-Type": "application/json"}
-    system_text = ""
-    chat_history = []
-    for msg in messages:
-        if msg["role"] == "system":
-            system_text = msg["content"]
-        else:
-            chat_history.append({"role": msg["role"], "text": msg["content"]})
-    request_body = {
-        "modelUri": f"gpt://{FOLDER_ID}/yandexgpt-lite",
-        "completionOptions": {"stream": False, "temperature": 0.7, "maxTokens": 1000},
-        "messages": [{"role": "system", "text": system_text}, *chat_history]
-    }
-    try:
-        response = requests.post(url, headers=headers, json=request_body)
-        response.raise_for_status()
-        return response.json()["result"]["alternatives"][0]["message"]["text"]
-    except Exception as e:
-        st.error(f"Ошибка YandexGPT: {e}")
-        if 'response' in locals():
-            st.error(f"Ответ сервера: {response.text}")
-        return "Ошибка. Попробуйте позже."
+if not GROQ_API_KEY:
+    logger.warning(
+        "GROQ_API_KEY не задан! Зарегистрируйся на console.groq.com, создай ключ "
+        "на console.groq.com/keys и впиши его в .env (см. .env.example)."
+    )
+
+app = FastAPI(title="AI-репетитор: ВПР и Олимпиады")
 
 
-def get_system_prompt(subject, exam_type, grade):
-    if exam_type == "ВПР":
-        return f"""Ты - добрый и поддерживающий репетитор по предмету «{subject}» для {grade} класса. Твоя главная задача — готовить ученика к ВПР, используя ТОЛЬКО реальные задания из официальных источников."
-
-**ВАЖНОЕ ПРАВИЛО:** Ты всегда начинаешь ответ с похвалы, даже если ученик ошибся.
-
-**ИСТОЧНИКИ ЗАДАНИЙ:**
-Ты черпаешь задания из официального банка заданий ВПР. Используй демоверсии, образцы и описания проверочных работ для {grade} класса, которые там опубликованы.
-
-**ФОРМАТ ЗАДАНИЙ:**
-Ты даёшь задания ТОЧНО в формате ВПР для {grade} класса. Типы заданий для русского языка включают:
-- работу с текстом, напиши правильно слово.
-- орфографию (вставь буквы, объясни правописание)
-- пунктуацию (расставь запятые, объясни)
-- грамматику (Морфологический разбор(Причастие,Деепричастие))
-- Определить многозначное слово и написать предложение с упоминанием этого слова в другом значение
-- Определить предлоги и правильно их написать
-- Отличить союзы от наречий. Написать их правильно
-
-**После правильного ответа:** сразу давай следующее задание. Оно должно быть другого типа. Меняй тексты и формулировки.
-
-**Если ученик ошибся:** похвали за старание, мягко укажи на ошибку, объясни правило, дай аналогичное задание для закрепления.
-
-**Разнообразие:** Чередуй типы заданий. Для каждого нового задания бери реальные тексты из демоверсий.
-
-**Пример начала диалога:** «Привет! Я твой репетитор по русскому языку для 7 класса. Готовься к ВПР! Вот задание №1 (взято из демоверсии ВПР): ... 
-    else:  # Олимпиада
-        return f"""Ты - репетитор по {subject} для {grade} класса, готовишь к олимпиаде. Используй реальные олимпиадные задания из архива Всероссийской олимпиады школьников (ВсОШ) и других авторитетных источников. Задания повышенной сложности, с нестандартными формулировками. Всегда хвали ученика. После правильного ответа сразу давай следующее задание, меняй тип и тему. Будь дружелюбным и требовательным."""
+class ChatMessage(BaseModel):
+    role: Literal["user", "model"]
+    text: str
 
 
-# Инициализация
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "current_subject" not in st.session_state:
-    st.session_state.current_subject = "Математика"
-if "current_grade" not in st.session_state:
-    st.session_state.current_grade = 7
-if "current_exam_type" not in st.session_state:
-    st.session_state.current_exam_type = "ВПР"
+class ChatRequest(BaseModel):
+    subject: str
+    exam_type: Literal["ВПР", "Олимпиада"]
+    grade: int = Field(ge=4, le=11)
+    history: list[ChatMessage] = []
+    # Если это первый запрос в диалоге — history пустая, а модель сама
+    # генерирует приветствие и первое задание.
 
-# Боковая панель с динамическим выбором класса
-with st.sidebar:
-    st.header("📌 Настройки")
-    subject = st.selectbox("Предмет", ["Математика", "Русский язык", "Физика", "Астраномия", "Химия", "Биология", "История"])
-    exam_type = st.radio("Тип", ["ВПР", "Олимпиада"])
 
-    # ВПР только для 4-8 классов
-    if exam_type == "ВПР":
-        available_grades = list(range(4, 9))  # 4,5,6,7,8
-        default_grade = 7
+def call_groq(system_prompt: str, history: list[ChatMessage]) -> str:
+    if not GROQ_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="GROQ_API_KEY не настроен на сервере. Смотри .env.example.",
+        )
+
+    # Groq — OpenAI-совместимый формат: роли "system"/"user"/"assistant"
+    messages = [{"role": "system", "content": system_prompt}]
+    if not history:
+        messages.append({"role": "user", "content": "Начнём урок. Дай первое задание."})
     else:
-        available_grades = list(range(4, 12))  # 4,5,6,7,8,9,10,11
-        default_grade = 7
+        for m in history:
+            role = "assistant" if m.role == "model" else "user"
+            messages.append({"role": role, "content": m.text})
 
-    grade = st.selectbox("Класс", available_grades, index=available_grades.index(default_grade))
+    payload = {
+        "model": GROQ_MODEL,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": 1000,
+    }
 
-    if st.button("🔄 Начать новый диалог"):
-        st.session_state.messages = []
-        st.session_state.current_subject = subject
-        st.session_state.current_grade = grade
-        st.session_state.current_exam_type = exam_type
-        st.rerun()
+    try:
+        resp = requests.post(
+            GROQ_URL,
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["choices"][0]["message"]["content"]
+    except requests.exceptions.HTTPError as e:
+        logger.error("Groq API error: %s | %s", e, resp.text)
+        raise HTTPException(status_code=502, detail=f"Ошибка Groq API: {resp.text[:300]}")
+    except (KeyError, IndexError) as e:
+        logger.error("Unexpected Groq response shape: %s", e)
+        raise HTTPException(status_code=502, detail="Неожиданный формат ответа от Groq.")
+    except requests.exceptions.RequestException as e:
+        logger.error("Network error calling Groq: %s", e)
+        raise HTTPException(status_code=502, detail="Не удалось связаться с Groq API.")
 
-# Обновление настроек
-if (st.session_state.current_subject != subject or
-        st.session_state.current_grade != grade or
-        st.session_state.current_exam_type != exam_type):
-    st.session_state.current_subject = subject
-    st.session_state.current_grade = grade
-    st.session_state.current_exam_type = exam_type
 
-st.title("📚 Репетитор для подготовки к ВПР и олимпиадам")
-st.markdown(
-    f"**Предмет:** {st.session_state.current_subject}  |  **Тип:** {st.session_state.current_exam_type}  |  **Класс:** {st.session_state.current_grade}")
+@app.post("/api/chat")
+def chat(req: ChatRequest):
+    system_prompt = get_system_prompt(req.subject, req.exam_type, req.grade)
+    reply = call_groq(system_prompt, req.history)
+    return {"reply": reply}
 
-# Отображение истории
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
 
-# Первое сообщение, если пусто
-if len(st.session_state.messages) == 0:
-    system_prompt = get_system_prompt(st.session_state.current_subject, st.session_state.current_exam_type,
-                                      st.session_state.current_grade)
-    first_request = [{"role": "system", "content": system_prompt}, {"role": "user", "content": "Дай первое задание."}]
-    with st.chat_message("assistant"):
-        with st.spinner("Готовлю задание..."):
-            response = ask_yandexgpt(first_request)
-            st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
+@app.get("/api/health")
+def health():
+    return {"ok": True, "model": GROQ_MODEL, "key_configured": bool(GROQ_API_KEY)}
 
-# Ввод пользователя
-if prompt := st.chat_input("Напишите ответ или вопрос..."):
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    with st.chat_message("user"):
-        st.markdown(prompt)
-    system_prompt = get_system_prompt(st.session_state.current_subject, st.session_state.current_exam_type,
-                                      st.session_state.current_grade)
-    full_messages = [{"role": "system", "content": system_prompt}] + st.session_state.messages
-    with st.chat_message("assistant"):
-        with st.spinner("Думаю..."):
-            response = ask_yandexgpt(full_messages)
-            st.markdown(response)
-    st.session_state.messages.append({"role": "assistant", "content": response})
 
-st.divider()
-st.caption("YandexGPT. Репетитор для ВПР и олимпиад.")
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+@app.get("/")
+def index():
+    return FileResponse("static/index.html")

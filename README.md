@@ -1,60 +1,58 @@
-# 📚 AI-Coach
+# AI-репетитор — ВПР и Олимпиады
 
-An AI tutor for exam and olympiad prep — generates practice tasks in the real format of Russian school exams (ВПР) and academic olympiads (ВсОШ), reviews answers, and adapts to the subject, grade, and prep type.
+Репетитор с адаптивными заданиями по предмету, классу и типу подготовки (ВПР / олимпиада).
+Backend — FastAPI, AI — Groq API (модель `openai/gpt-oss-120b`), полностью бесплатно.
 
-**Built solo by [0x8]([https://github.com/0x8-root])**
-
----
-
-## What it does
-
-A chatbot powered by YandexGPT that acts like a personal tutor:
-
-- 🎯 Subject selection (math, Russian, physics, astronomy, chemistry, biology, history)
-- 📝 Two modes: **ВПР prep** (grades 4-8) or **olympiad prep** (grades 4-11)
-- 💬 Live conversation — a new task follows right after each answer, alternating task types
-- 🌱 Encouraging tone — praises effort, explains mistakes gently
-
-## Stack
-
-- **Python** + **Streamlit** — chat interface and logic
-- **YandexGPT API** (yandexgpt-lite) — task generation and answer review
-- `requests`, `json` — API handling
-
-## Getting Started
+## Запуск локально
 
 ```bash
-git clone https://github.com/Lux-8/ai-coach.git
+# 1. клонируй репозиторий, зайди в папку
 cd ai-coach
+
+# 2. поставь зависимости
 pip install -r requirements.txt
-streamlit run app.py
+
+# 3. зарегистрируйся на console.groq.com (email или Google-аккаунт,
+#    без карты, без возрастной проверки) и создай ключ на console.groq.com/keys
+cp .env.example .env
+# открой .env и впиши GROQ_API_KEY
+
+# 4. запусти
+uvicorn app:app --reload
+
+# 5. открой в браузере
+http://127.0.0.1:8000
 ```
 
-### ⚠️ API Key Setup
+## Важно про безопасность
 
-Before running, create a `.env` file in the project root:
+- Ключ живёт только в `.env`, который в `.gitignore` — **никогда не коммить `.env` в git**.
+- В самой первой версии проекта ключ Yandex был прямо в коде и лежал в публичном
+  репозитории — если тот ключ ещё активен, отзови его в консоли Yandex Cloud.
+
+## Почему Groq
+
+- Единственный из проверенных вариантов без карты и без возрастного гейта:
+  Google AI Studio требует подтверждения возраста 18+, Yandex AI Studio требует
+  привязки банковской карты.
+- Бесплатный тариф Groq: 14 400 запросов/день, 30 запросов/мин — с большим запасом
+  для личного использования и нескольких друзей.
+- Модель `openai/gpt-oss-120b` — сильная открытая модель (120B), заметно лучше
+  YandexGPT-lite. Если понадобится скорость важнее качества — есть
+  `openai/gpt-oss-20b`, просто смени `GROQ_MODEL` в `.env`.
+
+## Структура
 
 ```
-YANDEX_API_KEY=your_key
-YANDEX_FOLDER_ID=your_folder_id
+app.py            — FastAPI backend, обращение к Groq API
+prompts.py        — системные промпты (легко редактировать отдельно от логики)
+static/index.html — разметка
+static/style.css  — стили (тема тетради)
+static/script.js  — логика чата на клиенте
+.env.example      — шаблон переменных окружения
 ```
 
-And add `.env` to `.gitignore` so the key never gets committed.
+## Деплой
 
-## How it works
-
-1. You pick a subject, grade, and prep type from the sidebar
-2. The system builds a prompt matching the real ВПР/ВсОШ format for that grade
-3. YandexGPT generates a task in the style of real exam/olympiad archives
-4. After your answer — feedback + the next task of a different type, to keep it varied
-
-## Roadmap
-
-- [ ] Move system prompts into a separate config
-- [ ] Save progress across sessions
-- [ ] Track weak topics per student
-- [ ] Support more subjects/grades
-
----
-
-*Solo project. A learning tool for exam and olympiad prep.*
+Для бесплатного хостинга подойдёт Render.com (free tier) — задай `GROQ_API_KEY`
+как переменную окружения в панели хостинга, не в коде.
